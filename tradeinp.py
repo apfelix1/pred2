@@ -8,13 +8,22 @@ import os
 import matplotlib.pyplot as plt
 
 secUtils = CSecurityMarketDataUtils('Z:/StockData')
+tdPeriodList = TradingDays(startDate='20200101', endDate='20201231')
+tdPeriodList = [date.replace('-','') for date in tdPeriodList]
 
-def get_tradelist(name,date):
+def get_rtarr(name, date):
+    return pd.read_csv('./etf/'+name+'/'+date+'.csv')
 
-    tradelist = np.genfromtxt('./')
+def get_etf_tick_data(name, date):
+    return secUtils.FundTAQDataFrame(name, date)
 
-    return
+def get_pred_data(name):
+    data = pd.read_csv('./data/'+name+'.csv')
+    data['TradingDate'] = data['TradingDate'].str.replace('-','')
+    print(data)
 
+def analysis_result(name):
+    for date in tdPeriodList:
+        rtarr = get_rtarr(name, date)
 
-def get_tick_data(name,date):
-    return
+get_pred_data('510050.SH')
