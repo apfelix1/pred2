@@ -16,4 +16,4 @@ for index in range(len(tradelog.index)):
     for date in tradeperiod:
         df[df['date'] == date]['count'] +=1
 
-print(df)
+# print(df)
