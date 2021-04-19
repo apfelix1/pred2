@@ -148,24 +148,128 @@ def rm_sim(name):
     return blsdf
 
 
-def analysis_result(name):
+def financing_analysis(name,date,data,threshold,fincost):
+    rtarr = get_rtarr(name, date)
+
+    pdata = data[data['TradingDate'].astype(str) == date]
+    pdata.reset_index(drop=True, inplace=True)
+    pdata['tradingMethod'] = 'N/A'
+    pdata['startQ'] = 0
+    pdata['endQ'] = 0
+    pdata['tradingSignal'] = 'N/A'
+    pdata['expectedReturn'] = 0
+    pdata['realReturn'] = 0
+    pdata['Commission'] = 0
+
+    for index in range(len(pdata)):
+        tick = pdata['TickLabel'].iloc[index]
+
+        rtarr1 = rtarr[rtarr['timetick']> tick]
+        rtarr1.reset_index(drop = True,inplace=True)
+
+        if len(rtarr1.index) <41:
+            break
+
+        if pdata['pred_return_rate'].iloc[index].astype(float) > 0:
+            startq = rtarr1['prIOPV'].iloc[0].astype(float)
+            endq = rtarr1['prETF'].iloc[40].astype(float)
+
+
+            pdata['tradingMethod'].iloc[index] = 'Long'
+            pdata['startQ'].iloc[index] = startq
+            pdata['endQ'].iloc[index] = endq
+            if startq * endq == 0:
+                pdata['tradingSignal'].iloc[index] = 0
+                continue
+            # determine trade signal
+
+            if rtarr1['prrate'].iloc[0].astype(float) + pdata['pred_return_rate'].iloc[index].astype(
+                    float) >= fincost +threshold:
+                if rtarr1['prrate'].iloc[0].astype(float) > 0:
+                    pdata['tradingSignal'].iloc[index] = 1
+                else:
+                    pdata['tradingSignal'].iloc[index] = 0
+            else:
+                pdata['tradingSignal'].iloc[index] = 0
+
+
+
+
+            # getting return rate
+            if pdata['tradingSignal'].iloc[index] == 1:
+                pdata['expectedReturn'].iloc[index] = pdata['pred_return_rate'].iloc[index].astype(float)\
+                                                      + rtarr1['prrate'].iloc[0].astype(float)-fincost
+                pdata['realReturn'].iloc[index] = ((pdata['endQ'].iloc[index]-pdata['startQ'].iloc[index]) -
+                                                   (0.00012)*(pdata['endQ'].iloc[index]+pdata['startQ'].iloc[index])
+                                                   -fincost*(pdata['startQ'].iloc[index]))\
+                                                / pdata['startQ'].iloc[index]
+                pdata['Commission'].iloc[index] = (pdata['startQ'].iloc[index] + pdata['endQ'].iloc[index]) * (0.00012)+\
+                                                  fincost*(pdata['startQ'].iloc[index])
+        # '''
+        else:
+
+            startq = rtarr1['dcIOPV'].iloc[0].astype(float)
+            endq = rtarr1['dcETF'].iloc[20].astype(float)
+
+            pdata['tradingMethod'].iloc[index] = 'Short'
+            pdata['startQ'].iloc[index] = startq
+            pdata['endQ'].iloc[index] = endq
+
+            if startq * endq == 0:
+                pdata['tradingSignal'].iloc[index] = 0
+                continue
+
+            # determine trade signal
+
+            if rtarr1['dcrate'].iloc[0].astype(float) + abs(
+                    pdata['pred_return_rate'].iloc[index].astype(float)) >= fincost+threshold:
+                if rtarr1['dcrate'].iloc[0].astype(float) > 0:
+                    pdata['tradingSignal'].iloc[index] = 1
+                else:
+                    pdata['tradingSignal'].iloc[index] = 0
+            else:
+                pdata['tradingSignal'].iloc[index] = 0
+
+
+
+
+            if pdata['tradingSignal'].iloc[index] == 1:
+                pdata['expectedReturn'].iloc[index] = abs(pdata['pred_return_rate'].iloc[index].astype(float))\
+                                                      + rtarr1['dcrate'].iloc[0].astype(float)-fincost
+                pdata['realReturn'].iloc[index] = ((pdata['startQ'].iloc[index]-pdata['endQ'].iloc[index]) -
+                                                   (pdata['startQ'].iloc[index]+pdata['endQ'].iloc[index]) *(0.00012) -
+                                                   0.001*(pdata['startQ'].iloc[index])-fincost*(pdata['startQ'].iloc[index]))\
+                                                / pdata['startQ'].iloc[index]
+                pdata['Commission'].iloc[index] = (pdata['startQ'].iloc[index]+pdata['endQ'].iloc[index])*(0.00012)+\
+                                                  0.001*(pdata['startQ'].iloc[index])
+# '''
+    print(pdata)
+    path = './tradelog18/'+name
+    folder = os.path.exists(path)
+    if not folder:
+        os.makedirs(path)
+
+    pdata.to_csv(path+'/'+date+'.csv')
+    return
+
+def analysis_result(name,threshold,fincost = 0):
     predict_data = get_pred_data(name)
 
 
     anadf = pd.DataFrame(columns = ['date','nSignal', 'totalSignal','nPosReturn','meanReturn'])
     for date in tdPeriodList:
-        #day_analysis(name,date,predict_data)
+        financing_analysis(name,date,predict_data,threshold,fincost)
 
 
-#'''
-       daydata = pd.read_csv('./tradelog10/'+name+'/'+date+'.csv',index_col= 0)
+'''
+       daydata = pd.read_csv('./tradelog11/'+name+'/'+date+'.csv',index_col= 0)
        anadf = anadf.append({'date':date, 'nSignal':len(daydata[daydata['tradingSignal']==1].index),
                      'totalSignal':len(daydata.index), 'nPosReturn':len(daydata[daydata['realReturn'] > 0].index),
                      'meanReturn':daydata[daydata['realReturn'] != 0]['realReturn'].mean()},ignore_index= True)
 
-       anadf.to_csv('./'+name[0:6]+'testresult10.csv')
-#'''
+       anadf.to_csv('./'+name[0:6]+'testresult11.csv')
+'''
 
 
-quant = rm_sim(name='510050.SH')
-#data = analysis_result('510050.SH')
+#quant = rm_sim(name='510050.SH')
+data = analysis_result('510300.SH',0.0001,0.00017)
