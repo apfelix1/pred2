@@ -15,6 +15,9 @@ tdPeriodList = [date.replace('-', '') for date in tdPeriodList]
 def get_tradelog(name,date):
     return pd.read_csv(path+name+'/'+date+'.csv', index_col=0)
 
+def get_tradelog2(name,date):
+    return pd.read_csv(path+date+'.csv', index_col=0)
+
 def rmtrade(name,limit=4):
     quant = 0
     blsdf = pd.DataFrame(columns=['date', 'quant'])
@@ -169,7 +172,7 @@ def adj_rmt(name,limit):
     blsdf = pd.DataFrame(columns=['date', 'quant'])
     for date in tdPeriodList:
         print(date)
-        daydata = get_tradelog(name, date)
+        daydata = get_tradelog2(name, date)
 
         lduetick = [-1] * limit
         sduetick = [-1] * limit
@@ -179,15 +182,18 @@ def adj_rmt(name,limit):
                 continue
             else:
 
+
                 if daydata['tradingMethod'].iloc[index] == 'Short':
+                    #'''
 
                     if (-1) in sduetick:
                         sduetick[sduetick.index(-1)] = index + 40
                         quant += (daydata['startQ'].iloc[index] - daydata['endQ'].iloc[index]) - 0.00012 * (
                                 daydata['startQ'].iloc[index] + daydata['endQ'].iloc[index]) - 0.001 * \
                                  daydata['startQ'].iloc[index]
+                    #'''
 
-                # '''
+
                 if daydata['tradingMethod'].iloc[index] == 'Long':
                     if index in lduetick:
                         lduetick.remove(index)
@@ -198,8 +204,8 @@ def adj_rmt(name,limit):
                                 daydata['endQ'].iloc[index] + daydata['startQ'].iloc[index])
         # '''
         blsdf = blsdf.append({'date': date, 'quant': quant}, ignore_index=True)
-    blsdf.to_csv('./adjtest1/' + name[0:6] + 'rmblslog8x-l&s.csv')
-    return
+    #blsdf.to_csv('./adjtest2/' + name[0:6] + 'rmblslog10.csv')
+    return blsdf
 
 def adj_spot(name,threshold):
     quant = 0
@@ -350,12 +356,12 @@ def money_in_use(name):
     return
 
 #这个tradelog记录在融资情况下加入每天万2.5(年0.08)/1.7(年0.06)的成本
-def fin_rmtrade(name):
+def fin_rmtrade(name,rate):
     quant = 0
     blsdf = pd.DataFrame(columns=['date', 'quant'])
     for date in tdPeriodList:
         print(date)
-        daydata = get_tradelog(name, date)
+        daydata = get_tradelog2(name, date)
 
         for index in range(len(daydata.index)):
             if daydata['tradingSignal'].iloc[index] == 1:
@@ -363,17 +369,17 @@ def fin_rmtrade(name):
                 if daydata['tradingMethod'].iloc[index] == 'Short':
                     quant += (daydata['startQ'].iloc[index] - daydata['endQ'].iloc[index]) - 0.00012 * (
                             daydata['startQ'].iloc[index] + daydata['endQ'].iloc[index]) - 0.001 * \
-                             daydata['startQ'].iloc[index]-0.00017*(daydata['startQ'].iloc[index])
+                             daydata['startQ'].iloc[index]-(rate/360)*(daydata['startQ'].iloc[index])
 
                 # '''
                 if daydata['tradingMethod'].iloc[index] == 'Long':
                     quant += (daydata['endQ'].iloc[index] - daydata['startQ'].iloc[index]) - 0.00012 * (
-                            daydata['endQ'].iloc[index] + daydata['startQ'].iloc[index])-0.00017*(daydata['startQ'].iloc[index])
+                            daydata['endQ'].iloc[index] + daydata['startQ'].iloc[index])-(rate/360)*(daydata['startQ'].iloc[index])
                     # '''
 
         blsdf = blsdf.append({'date': date, 'quant': quant}, ignore_index=True)
-    blsdf.to_csv('./finrmt2/' + name[0:6] + 't3.csv')
-    return
+    #blsdf.to_csv('./finrmt2/' + name[0:6] + 't3.csv')
+    return blsdf
 
 def adj_spot2(name,threshold,shock):
     quant = 0
@@ -420,19 +426,63 @@ def adj_spot2(name,threshold,shock):
     tradelog.to_csv('./adjspot2/' + name[0:6] + 't0' + '.csv')
     return
 
-path = './tradelog18/'
+path = './tradelog10/'
 
 
 if __name__ == '__main__':
     #rmtrade('510300.SH',4)
     #spot_trade_return('510050.SH')
     #hybrid_return('510300.SH', 4, 0.0001)
-    #adj_rmt('510300.SH',4)
+    #adj_rmt('510300.SH',1)
     #adj_spot('510300.SH',0.000)
     #backtest1('510050.SH',0.0001)
     #money_in_use('510050.SH')
     #fin_rmtrade('510050.SH')
-    adj_spot2('510300.SH',0,0.001)
+    #adj_spot2('510300.SH',0,0.001)
+    name = '510050.SH'
+    rate = 0.06
+    result = pd.DataFrame(columns=['threshold','quant'])
+    '''
+
+    for index in list(range(21)):
+        if index == 0:
+            threshold = '0.0'
+        elif 0<index <10:
+            threshold = '0.000'+str(index)
+        elif index == 10 or index == 20:
+            threshold = '0.00' +str(int(index/10))
+        else:
+            threshold = '0.00'+str(index)
+
+        path = './finopt/'+name+'/'+str(rate)+'/'+threshold+'/'
+
+        blslog = fin_rmtrade(name,rate)
+        result = result.append({'threshold':float(threshold),'quant':blslog['quant'].iloc[-1]},ignore_index=True)
+    '''
+
+    threshold = '0.0005'
+    path = './finopt/'+name+'/'+str(rate)+'/'+threshold+'/'
+    blslog = fin_rmtrade(name,rate)
+
+    #print(blslog)
+    '''
+    anadf = pd.DataFrame(columns=['date', 'nSignal', 'totalSignal', 'nPosReturn', 'meanReturn'])
+    for date in tdPeriodList:
+        daydata = pd.read_csv(path + date + '.csv', index_col=0)
+        anadf = anadf.append({'date': date, 'nSignal': len(daydata[daydata['tradingSignal'] == 1].index),
+                              'totalSignal': len(daydata.index),
+                              'nPosReturn': len(daydata[daydata['realReturn'] > 0].index),
+                              'meanReturn': daydata[daydata['realReturn'] != 0]['realReturn'].mean()},
+                             ignore_index=True)
+
+    anadf.to_csv('./optimallog/' + name[0:6] + 't=0.0.csv')
+    '''
+
+
+
+
+
+
 
 
 

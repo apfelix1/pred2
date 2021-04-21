@@ -22,8 +22,9 @@ def get_pred_data(name):
     data = pd.read_csv('./data/'+name+'.csv')
     return data
 
-def day_analysis(name,date,data):
+def day_analysis(name,date,threshold):
     rtarr = get_rtarr(name, date)
+    data = get_pred_data(name)
 
     pdata = data[data['TradingDate'].astype(str) == date]
     pdata.reset_index(drop=True, inplace=True)
@@ -41,12 +42,12 @@ def day_analysis(name,date,data):
         rtarr1 = rtarr[rtarr['timetick']> tick]
         rtarr1.reset_index(drop = True,inplace=True)
 
-        if len(rtarr1.index) <21:
+        if len(rtarr1.index) <41:
             break
 
         if pdata['pred_return_rate'].iloc[index].astype(float) > 0:
             startq = rtarr1['prIOPV'].iloc[0].astype(float)
-            endq = rtarr1['prETF'].iloc[20].astype(float)
+            endq = rtarr1['prETF'].iloc[40].astype(float)
 
 
             pdata['tradingMethod'].iloc[index] = 'Long'
@@ -56,18 +57,16 @@ def day_analysis(name,date,data):
                 pdata['tradingSignal'].iloc[index] = 0
                 continue
             # determine trade signal
-            if pdata['pred_return_rate'].iloc[index].astype(float) >= 0.001:
-                if rtarr1['prrate'].iloc[0].astype(float)>-0:
+
+            if rtarr1['prrate'].iloc[0].astype(float) + pdata['pred_return_rate'].iloc[index].astype(float) >= threshold:
+                if  rtarr1['prETF'].iloc[0].astype(float)- rtarr1['prIOPV'].iloc[0].astype(float)> 0\
+                        and rtarr1['prETF'].iloc[0].astype(float)  != 0 \
+                        and rtarr1['prIOPV'].iloc[0].astype(float) != 0:
                     pdata['tradingSignal'].iloc[index] = 1
                 else:
                     pdata['tradingSignal'].iloc[index] = 0
-
             else:
-                if rtarr1['prrate'].iloc[0].astype(float) + pdata['pred_return_rate'].iloc[index].astype(float) >= 0.001:
-                    if  rtarr1['prrate'].iloc[0].astype(float) != 0:
-                        pdata['tradingSignal'].iloc[index] = 1
-                else:
-                    pdata['tradingSignal'].iloc[index] = 0
+                pdata['tradingSignal'].iloc[index] = 0
 
             # getting return rate
             if pdata['tradingSignal'].iloc[index] == 1:
@@ -81,7 +80,7 @@ def day_analysis(name,date,data):
         else:
 
             startq = rtarr1['dcIOPV'].iloc[0].astype(float)
-            endq = rtarr1['dcETF'].iloc[20].astype(float)
+            endq = rtarr1['dcETF'].iloc[40].astype(float)
 
             pdata['tradingMethod'].iloc[index] = 'Short'
             pdata['startQ'].iloc[index] = startq
@@ -93,17 +92,14 @@ def day_analysis(name,date,data):
 
             # determine trade signal
 
-            if pdata['pred_return_rate'].iloc[index].astype(float) <= -0.001:
-                if rtarr1['dcrate'].iloc[0].astype(float) > 0:
+            if rtarr1['dcrate'].iloc[0].astype(float) + abs(pdata['pred_return_rate'].iloc[index].astype(float)) >= threshold:
+                if rtarr1['dcIOPV'].iloc[0].astype(float)-  rtarr1['dcETF'].iloc[0].astype(float)> 0 and \
+                        rtarr1['dcIOPV'].iloc[0].astype(float) !=0 and  rtarr1['dcETF'].iloc[0].astype(float) !=0  :
                     pdata['tradingSignal'].iloc[index] = 1
                 else:
                     pdata['tradingSignal'].iloc[index] = 0
             else:
-                if rtarr1['dcrate'].iloc[0].astype(float) + abs(pdata['pred_return_rate'].iloc[index].astype(float)) >= 0.001:
-                    if rtarr1['dcrate'].iloc[0].astype(float) != 0:
-                        pdata['tradingSignal'].iloc[index] = 1
-                else:
-                    pdata['tradingSignal'].iloc[index] = 0
+                pdata['tradingSignal'].iloc[index] = 0
 
             # get return rates
             if pdata['tradingSignal'].iloc[index] == 1:
@@ -116,8 +112,18 @@ def day_analysis(name,date,data):
                 pdata['Commission'].iloc[index] = (pdata['startQ'].iloc[index]+pdata['endQ'].iloc[index])*(0.00012)+\
                                                   0.001*(pdata['startQ'].iloc[index])
 # '''
-    print(pdata)
-    path = './tradelog10/'+name
+    threshold = int(threshold *10000)
+
+    if threshold == 0:
+        threshold = '0.0'
+    elif 0 < threshold < 10:
+        threshold = '0.000' + str(threshold)
+    elif threshold == 10 or threshold == 20:
+        threshold = '0.00' + str(int(threshold / 10))
+    else:
+        threshold = '0.00' + str(threshold)
+
+    path = './optimallog/'+name+'/'+threshold
     folder = os.path.exists(path)
     if not folder:
         os.makedirs(path)
@@ -184,8 +190,10 @@ def financing_analysis(name,date,data,threshold,fincost):
             # determine trade signal
 
             if rtarr1['prrate'].iloc[0].astype(float) + pdata['pred_return_rate'].iloc[index].astype(
-                    float) >= fincost +threshold:
-                if rtarr1['prrate'].iloc[0].astype(float) > 0:
+                    float) >= (fincost/360) +threshold:
+                if rtarr1['prETF'].iloc[0].astype(float)- rtarr1['prIOPV'].iloc[0].astype(float)> 0\
+                        and rtarr1['prETF'].iloc[0].astype(float)  != 0 \
+                        and rtarr1['prIOPV'].iloc[0].astype(float) != 0:
                     pdata['tradingSignal'].iloc[index] = 1
                 else:
                     pdata['tradingSignal'].iloc[index] = 0
@@ -198,13 +206,13 @@ def financing_analysis(name,date,data,threshold,fincost):
             # getting return rate
             if pdata['tradingSignal'].iloc[index] == 1:
                 pdata['expectedReturn'].iloc[index] = pdata['pred_return_rate'].iloc[index].astype(float)\
-                                                      + rtarr1['prrate'].iloc[0].astype(float)-fincost
+                                                      + rtarr1['prrate'].iloc[0].astype(float)-(fincost/360)
                 pdata['realReturn'].iloc[index] = ((pdata['endQ'].iloc[index]-pdata['startQ'].iloc[index]) -
                                                    (0.00012)*(pdata['endQ'].iloc[index]+pdata['startQ'].iloc[index])
-                                                   -fincost*(pdata['startQ'].iloc[index]))\
+                                                   -(fincost/360)*(pdata['startQ'].iloc[index]))\
                                                 / pdata['startQ'].iloc[index]
                 pdata['Commission'].iloc[index] = (pdata['startQ'].iloc[index] + pdata['endQ'].iloc[index]) * (0.00012)+\
-                                                  fincost*(pdata['startQ'].iloc[index])
+                                                  (fincost/360)*(pdata['startQ'].iloc[index])
         # '''
         else:
 
@@ -222,8 +230,9 @@ def financing_analysis(name,date,data,threshold,fincost):
             # determine trade signal
 
             if rtarr1['dcrate'].iloc[0].astype(float) + abs(
-                    pdata['pred_return_rate'].iloc[index].astype(float)) >= fincost+threshold:
-                if rtarr1['dcrate'].iloc[0].astype(float) > 0:
+                    pdata['pred_return_rate'].iloc[index].astype(float)) >= (fincost/360)+threshold:
+                if rtarr1['dcIOPV'].iloc[0].astype(float)-  rtarr1['dcETF'].iloc[0].astype(float)> 0 and \
+                        rtarr1['dcIOPV'].iloc[0].astype(float) !=0 and  rtarr1['dcETF'].iloc[0].astype(float) !=0  :
                     pdata['tradingSignal'].iloc[index] = 1
                 else:
                     pdata['tradingSignal'].iloc[index] = 0
@@ -235,16 +244,28 @@ def financing_analysis(name,date,data,threshold,fincost):
 
             if pdata['tradingSignal'].iloc[index] == 1:
                 pdata['expectedReturn'].iloc[index] = abs(pdata['pred_return_rate'].iloc[index].astype(float))\
-                                                      + rtarr1['dcrate'].iloc[0].astype(float)-fincost
+                                                      + rtarr1['dcrate'].iloc[0].astype(float)-(fincost/360)
                 pdata['realReturn'].iloc[index] = ((pdata['startQ'].iloc[index]-pdata['endQ'].iloc[index]) -
                                                    (pdata['startQ'].iloc[index]+pdata['endQ'].iloc[index]) *(0.00012) -
-                                                   0.001*(pdata['startQ'].iloc[index])-fincost*(pdata['startQ'].iloc[index]))\
+                                                   0.001*(pdata['startQ'].iloc[index])-(fincost/360)*(pdata['startQ'].iloc[index]))\
                                                 / pdata['startQ'].iloc[index]
                 pdata['Commission'].iloc[index] = (pdata['startQ'].iloc[index]+pdata['endQ'].iloc[index])*(0.00012)+\
-                                                  0.001*(pdata['startQ'].iloc[index])
+                                                  0.001*(pdata['startQ'].iloc[index])+(fincost/360)*(pdata['endQ'].iloc[index])
 # '''
-    print(pdata)
-    path = './tradelog18/'+name
+    # print(pdata)
+    threshold = int(threshold * 10000)
+
+    if threshold == 0:
+        threshold = '0.0'
+    elif 0 < threshold < 10:
+        threshold = '0.000' + str(threshold)
+    elif threshold == 10 or threshold == 20:
+        threshold = '0.00' + str(int(threshold / 10))
+    else:
+        threshold = '0.00' + str(threshold)
+
+
+    path = './finopt/'+name+'/'+str(fincost)+'/'+threshold
     folder = os.path.exists(path)
     if not folder:
         os.makedirs(path)
@@ -252,13 +273,21 @@ def financing_analysis(name,date,data,threshold,fincost):
     pdata.to_csv(path+'/'+date+'.csv')
     return
 
-def analysis_result(name,threshold,fincost = 0):
+def analysis_result(name,threshold=0,fincost = 0):
     predict_data = get_pred_data(name)
 
 
+    pool = mp.Pool(mp.cpu_count())
     anadf = pd.DataFrame(columns = ['date','nSignal', 'totalSignal','nPosReturn','meanReturn'])
     for date in tdPeriodList:
-        financing_analysis(name,date,predict_data,threshold,fincost)
+        pool.starmap_async(financing_analysis, [(name,date,predict_data,threshold*0.0001,0.06) for threshold in list(range(21))])
+
+        #pool.starmap_async(day_analysis, [(name, date, threshold*0.0001) for threshold in list(range(21))])
+
+
+
+        # financing_analysis(name,date,predict_data,threshold,fincost)
+
 
 
 '''
@@ -272,4 +301,16 @@ def analysis_result(name,threshold,fincost = 0):
 
 
 #quant = rm_sim(name='510050.SH')
-data = analysis_result('510300.SH',0.0001,0.00017)
+if __name__=='__main__':
+    name = '510050.SH'
+
+    predict_data = get_pred_data(name)
+
+    pool = mp.Pool(mp.cpu_count())
+    anadf = pd.DataFrame(columns=['date', 'nSignal', 'totalSignal', 'nPosReturn', 'meanReturn'])
+    for date in tdPeriodList:
+        pool.starmap_async(financing_analysis,
+                           [(name, date, predict_data, threshold * 0.0001, 0.06) for threshold in list(range(21))])
+
+    # data = analysis_result('510300.SH')
+
