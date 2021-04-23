@@ -426,6 +426,8 @@ def adj_spot2(name,threshold,shock):
     tradelog.to_csv('./adjspot2/' + name[0:6] + 't0' + '.csv')
     return
 
+
+
 path = './tradelog10/'
 
 
